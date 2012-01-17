@@ -1,0 +1,44 @@
+/* 
+ * File:   Model.h
+ * Author: jeansebtr
+ *
+ * Created on 12 février 2011, 23:44
+ */
+
+#ifndef _MODEL_H
+#define	_MODEL_H
+
+struct Vertex
+{
+    double x;
+    double y;
+    double z;
+};
+
+struct Face
+{
+    char n;
+    int v[4];
+};
+
+
+
+class Model
+{
+public:
+    Model();
+    Model(const Model& orig);
+    virtual ~Model();
+
+    void Draw();
+    void SetVertex(Vertex *array, int n);
+    void SetFaces(Face *array, int n);
+private:
+    Face *aFaces;
+    int nFaces;
+    Vertex *aVertex;
+    int nVertex;
+};
+
+#endif	/* _MODEL_H */
+

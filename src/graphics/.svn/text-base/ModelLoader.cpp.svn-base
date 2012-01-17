@@ -1,0 +1,218 @@
+/* 
+ * File:   ModelLoader.cpp
+ * Author: jeansebtr
+ * 
+ * Created on 12 février 2011, 23:41
+ */
+
+#include "ModelLoader.h"
+
+#include <fstream>
+#include <stdlib.h>
+
+
+#include "../debug.h"
+#include "../Convert.h"
+
+bool ModelLoader::Load(Model* model, std::string file)
+{
+    dbg("Check for already loaded model '"+file+"'");
+    ModelComponents* current = NULL;
+    for(int i = 0; i < models.size(); i++)
+    {
+        current = models.at(i);
+        if(current->name != file)
+            break;
+    }
+    if(current == NULL)
+        current = LoadFromFile(file);
+    if(current == NULL)
+    {
+        return false;
+    }
+    else
+    {
+        dbg("Adding "+Convert::itos(current->nbVertex)+" vertex from" + file);
+        dbg("Adding "+Convert::itos(current->nbFace)+" faces from "+ file);
+        model->SetVertex(current->v, current->nbVertex);
+        model->SetFaces(current->f, current->nbFace);
+        return true;
+    }
+}
+
+Vertex ModelLoader::ReadVertex(char **pos, const char *end)
+{
+    Vertex v;
+    v.x = strtod(*pos, pos);
+    v.y = strtod(*pos, pos);
+    v.z = strtod(*pos, pos);
+    dbg("Vertex : "+Convert::dtos(v.x)+" "+Convert::dtos(v.y)+" "+Convert::dtos(v.z));
+    return v;
+}
+
+Face ModelLoader::ReadFace(char **pos, const char *end)
+{
+    char i = 0;
+    char n = 0;
+    Face f;
+    do
+    {
+        n = atoi(*pos);
+        *pos = NextWhiteSpace(*pos, end);
+        if(n != 0)
+        {
+            f.v[i] = n-1;
+            i++;
+        }
+        while(**pos != 0 && **pos != ' ' && **pos != '\r' && **pos != '\n')
+            *pos++;
+    }
+    while(n != 0);
+    f.n = i;
+    return f;
+}
+
+ModelComponentListNode* ModelLoader::LoadFromFile(std::string file)
+{
+    std::ifstream f;
+    dbg("Try opening file "+file);
+    f.open(file.c_str());
+    if(f)
+    {
+        dbg("File opened.");
+        f.seekg(0, std::ios::end);
+        int length = f.tellg();
+        f.seekg(0, std::ios::beg);
+        dbg("File is "+Convert::itos(length)+" bits long.");
+        char fBuff[length+1];
+        char *pos = fBuff;
+        const char *end = fBuff + length;
+        for(int i = 0; i < length; i++)
+        {
+            f.get(fBuff[i]);
+        }
+        f.close();
+        fBuff[length] = 0;
+        int nbVertex = 0;
+
+        VertexListNode* vFirst = NULL;
+        VertexListNode* vCurrent = NULL;
+        VertexListNode* vLast = NULL;
+        int nbFace = 0;
+        FaceListNode* fFirst = NULL;
+        FaceListNode* fCurrent = NULL;
+        FaceListNode* fLast = NULL;
+        while(pos < end)
+        {
+            dbg("Reading file.... "+Convert::itos(nbVertex)+"vertex, "+Convert::itos(nbFace)+"faces");
+            switch(*pos)
+            {
+                case 'v':
+                    pos++;
+                    vCurrent = new VertexListNode;
+                    vCurrent->v = ReadVertex(&pos, end);
+                    if(vFirst == NULL)
+                        vFirst = vCurrent;
+                    if(vLast != NULL)
+                        vLast->next = vCurrent;
+                    vLast = vCurrent;
+                    nbVertex++;
+                    pos = NextLine(pos, end);
+                    break;
+                case 'f':
+                    pos++;
+                    fCurrent = new FaceListNode;
+                    fCurrent->f = ReadFace(&pos, end);
+                    if(fFirst == NULL)
+                        fFirst = fCurrent;
+                    if(fLast != NULL)
+                        fLast->next = fCurrent;
+                    fLast = fCurrent;
+                    nbFace++;
+                    pos = NextLine(pos, end);
+                    break;
+                case 'o':
+                case '#':
+                default:
+                    pos = NextLine(pos, end);
+                    break;
+            }
+        }
+        f.close();
+        ModelComponentListNode * model = new ModelComponentListNode;
+        model->name = file;
+        model->nbFace = nbFace;
+        model->f = new Face[nbFace];
+        model->nbVertex = nbVertex;
+        model->v = new Vertex[nbVertex];
+        int i;
+        fCurrent = fFirst;
+        for(i = 0; i < nbFace; i++)
+        {
+            model->f[i] = fCurrent->f;
+            fFirst = fCurrent;
+            fCurrent = fCurrent->next;
+            delete fFirst;
+        }
+        vCurrent = vFirst;
+        for(i = 0; i < nbVertex; i++)
+        {
+            model->v[i] = vCurrent->v;
+            vFirst = vCurrent;
+            vCurrent = vCurrent->next;
+            delete vFirst;
+        }
+        if(mFirst == NULL)
+        {
+            mFirst = model;
+            mLast = mFirst;
+        }
+        else
+        {
+            mLast->next = model;
+            mLast = model;
+        }
+
+        return model;
+    }
+    else
+    {
+        f.close();
+        return NULL;
+    }
+}
+
+char* ModelLoader::NextLine(const char* debut, const char* max)
+{
+    int i;
+    for(i = 0; i < max - debut; i++)
+    {
+        if(debut[i] == '\r')
+        {
+            if(debut[i+1] == '\n')
+            {
+                i+=2;
+            }
+            else
+                i++;
+            break;
+        }
+        else if(debut[i] == '\n')
+        {
+            i++;
+            break;
+        }
+    }
+    return (char *)(debut+i);
+}
+
+char* ModelLoader::NextWhiteSpace(const char* debut, const char* max)
+{
+    int i;
+    for(i = 0; i < max - debut; i++)
+    {
+        if(debut[i] == ' ' || debut[i] == '\t' || debut[i] == '\r' || debut[i] == '\n')
+            break;
+    }
+    return (char *)(debut+i);
+}
